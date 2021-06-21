@@ -6,7 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.min.js"></script>
-    <!-- <link rel="stylesheet" type="text/css" href="style.css"> -->
     <style>
         body {
             background-color: rgb(31, 31, 31);
@@ -51,7 +50,7 @@
         };
         firebase.initializeApp(firebaseConfig);
     </script>
-    <title>Document</title>
+    <title>StocLogg Stats</title>
 </head>
 
 <body>
@@ -112,13 +111,11 @@
             var m = (count*sum_xy - sum_x*sum_y) / (count*sum_xx - sum_x*sum_x);
             var b = (sum_y/count) - (m*sum_x)/count;
 
-            var result_values = [];
             var prediction_values = [];
             values_x.push(7, 8, 9, 10, 11, 12, 13)
             for (var v = 0; v < 14; v++) {
                 x = values_x[v];
                 y = x * m + b;
-                result_values.push(y);
                 if (v >= 7) {
                     if (y < 0) {
                         y = 0
@@ -126,7 +123,7 @@
                     prediction_values.push(Math.round(y));
                 }
             }
-            return [prediction_values, result_values];
+            return prediction_values;
         }
 
         function formatTime(seconds) {
@@ -218,9 +215,7 @@
                 chartUsed[k] = -addUsed;
                 recentUsed += addUsed
             }
-            var square_total = findLineByLeastSquares([0, 1, 2, 3, 4, 5, 6], chartTotal)
-            var square_created = findLineByLeastSquares([0, 1, 2, 3, 4, 5, 6], chartCreated)
-            chartTotalPrediction = square_total[0]
+            var chartTotalPrediction = findLineByLeastSquares([0, 1, 2, 3, 4, 5, 6], chartTotal)
             chartTotalPrediction.unshift(null, null, null, null, null, null, chartTotal[6])
             var usageFrequency = 7 / recentUsed
             document.getElementById("usageFrequency").innerHTML = "- A box of " + itemName + " is opened approximately every " + Math.round(usageFrequency) + " days"
@@ -228,12 +223,10 @@
             for (i = 0; i < 6.5; i += usageFrequency) {
                 chartUsedPrediction[Math.round(i)] -= 1
             }
-            chartChangePrediction = [];
             chartCreatedPrediction = [];
             var notified = false;
             for (i = 7; i < 14; i++) {
                 diff = chartTotalPrediction[i]-chartTotalPrediction[i-1]
-                chartChangePrediction.push(diff)
                 if (diff > chartUsedPrediction[i-7]) {
                     chartCreatedPrediction.push(diff-chartUsedPrediction[i-7])
                 }
@@ -249,10 +242,9 @@
             if (notified == false) {
                 document.getElementById("nextBox").innerHTML = "- You don't need to purchase any more " + itemName + " in the next week"
             }
-            chartChangePrediction.unshift(null, null, null, null, null, null, null)
             chartUsedPrediction.unshift(null, null, null, null, null, null, null)
             chartCreatedPrediction.unshift(null, null, null, null, null, null, null)
-            window.chartValues = {created: chartCreated, used: chartUsed, total: chartTotal, totalPrediction: chartTotalPrediction, trend: square_total[1], changePrediction: chartChangePrediction, createdPrediction: chartCreatedPrediction, usedPrediction: chartUsedPrediction}
+            window.chartValues = {created: chartCreated, used: chartUsed, total: chartTotal, totalPrediction: chartTotalPrediction, createdPrediction: chartCreatedPrediction, usedPrediction: chartUsedPrediction}
             return window.chartValues
         }
 
