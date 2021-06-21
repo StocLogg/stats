@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.min.js"></script>
+    <!-- <link rel="stylesheet" type="text/css" href="style.css"> -->
+    <style>
+        body {
+            background-color: rgb(31, 31, 31);
+            color: rgb(255, 255, 255);
+            font-family: Montserrat,sans-serif
+        }
+        canvas {
+            background-color: rgb(255, 255, 255);
+        }
+        div {
+            width: 48%
+        }
+        .chart1 {
+            float: left;
+            margin-left: 1%
+        }
+        .chart2 {
+            margin-left: 51%
+        }
+        @media only screen and (max-width: 700px) {
+            div {
+                width: 100%;
+            }
+            .chart2 {
+                margin-left: 1%;
+                margin-top: 60%
+            }
+        }
+    </style>
+
+    <script src="https://www.gstatic.com/firebasejs/8.2.9/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.2.9/firebase-firestore.js"></script>
+
+    <script>
+        var firebaseConfig = {
+            apiKey: "AIzaSyBRcy-xOnQps0ytTLDqR7iDn26DX751jW0",
+            authDomain: "stoclogg.firebaseapp.com",
+            projectId: "stoclogg",
+            storageBucket: "stoclogg.appspot.com",
+            messagingSenderId: "1017066987484",
+            appId: "1:1017066987484:web:2626280026a292db3ab919"
+        };
+        firebase.initializeApp(firebaseConfig);
+    </script>
+    <title>Document</title>
+</head>
+
+<body>
+    <h1>Recent Stock Usage and Predictions</h1>
+    <br>
+    <h3><i id="nextBox"></i></h3>
+    <p id="usageTime"></p>
+    <p id="usageFrequency"></p>
+    <br>
+    <div class="chart1">
+        <canvas id="myChart"></canvas>
+    </div>
+    <div class="chart2">
+        <canvas id="myChart2"></canvas>
+    </div>
+    <script>
+        var db = firebase.firestore();
+        window.chartValues = [];
+        let mystore = 'kEaWx2RYcn7K4u3wWAaQ'; // Canteen store
+        let itemType = 'CKUBaxU5TBv5fQY2GSxX'; // Chips
+        let itemName = "Chips";
+        let notify = 3; // Required amount of boxes
+
+        let items = [];
+
+        async function getItems() {
+            let tempData = [];
+            await db.collection(`/store/${mystore}/items`).where('typeId', '==', itemType).get().then((snap) => {
+                snap.forEach((doc) => {
+                    items.push({ ...doc.data(), id: doc.id })
+                })
+                tempData = getStuff(items);
+            })
+            return tempData
+        }
+
+        function findLineByLeastSquares(values_x, values_y) {
+            var sum_x = 0;
+            var sum_y = 0;
+            var sum_xy = 0;
+            var sum_xx = 0;
+            var count = 0;
+
+            var x = 0;
+            var y = 0;
+            var values_length = values_x.length;
+
+            for (var v = 0; v < values_length; v++) {
+                x = values_x[v];
+                y = values_y[v];
+                sum_x += x;
+                sum_y += y;
+                sum_xx += x*x;
+                sum_xy += x*y;
+                count++;
+            }
+
+            var m = (count*sum_xy - sum_x*sum_y) / (count*sum_xx - sum_x*sum_x);
+            var b = (sum_y/count) - (m*sum_x)/count;
+
+            var result_values = [];
+            var prediction_values = [];
+            values_x.push(7, 8, 9, 10, 11, 12, 13)
+            for (var v = 0; v < 14; v++) {
+                x = values_x[v];
+                y = x * m + b;
+                result_values.push(y);
+                if (v >= 7) {
+                    if (y < 0) {
+                        y = 0
+                    }
+                    prediction_values.push(Math.round(y));
+                }
+            }
+            return [prediction_values, result_values];
+        }
+
+        function formatTime(seconds) {
+            var hours = Math.round(seconds / 3600);
+            var days = Math.round(seconds / 86400);
+            var formatted = "";
+            if (days > 0) {
+                formatted += days + " days ";
+            }
+            else {
+                formatted += hours + " hours";
+            }
+            return formatted;
+        }
+
+        function loopDays() {
+            var days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+            var today = new Date();
+            for (var j = 0; j < today.getDay(); j++) {
+                days.push(days[0]);
+                days.shift();
+            }
+            return days;
+        }
+
+        function fullDay(shortDay) {
+            if (["Mon", "Fri", "Sun"].includes(shortDay)) {
+                return shortDay + "day"
+            }
+            if (shortDay == "Tue") {
+                return "Tuesday"
+            }
+            if (shortDay == "Wed") {
+                return "Wednesday"
+            }
+            if (shortDay == "Thu") {
+                return "Thursday"
+            }
+            if (shortDay == "Sat") {
+                return "Saturday"
+            }
+        }
+
+        function getStuff(items) {
+            var usageDates = [];
+            var creationDates = [];
+            var numUsed = 0;
+            var totalUsageTime = 0;
+            for (var i of items) {
+                var day = i.dateCreated.toDate()
+                day.setDate(day.getDate())
+                creationDates.push(new Date(day));
+                if (i.used) {
+                    var timeElapsed = Math.round(i.dayFinished - i.dateCreated);
+                    day = i.dayFinished.toDate()
+                    usageDates.push(new Date(day));
+                    numUsed += 1;
+                    totalUsageTime += timeElapsed;
+                }
+            }
+            var averageUsageTime = totalUsageTime / numUsed
+            document.getElementById("usageTime").innerHTML = "- The average storage time (until opened) for " + i.typeName + " is " + formatTime(averageUsageTime)
+            chartTotal = Array(7).fill(items.length - usageDates.length);
+            chartCreated = Array(7).fill(0)
+            chartUsed = Array(7).fill(0)
+            addTotal = 0;
+            addCreated = 0;
+            addUsed = 0;
+            recentUsed = 0;
+            for (var k = 6; k >= 0; k--) {
+                today = new Date()
+                today.setDate(today.getDate() + k - 6);
+                chartTotal[k] += addTotal;
+                addCreated = 0;
+                addUsed = 0;
+                for (l in usageDates) {
+                    if (new Date(usageDates[l]).setHours(0, 0, 0, 0) == today.setHours(0, 0, 0, 0)) {
+                        addUsed += 1
+                        addTotal += 1
+                    }
+                }
+                for (l in creationDates) {
+                    if (new Date(creationDates[l]).setHours(0, 0, 0, 0) == today.setHours(0, 0, 0, 0)) {
+                        addCreated += 1
+                        addTotal -= 1
+                    }
+                }
+                chartCreated[k] = addCreated;
+                chartUsed[k] = -addUsed;
+                recentUsed += addUsed
+            }
+            var square_total = findLineByLeastSquares([0, 1, 2, 3, 4, 5, 6], chartTotal)
+            var square_created = findLineByLeastSquares([0, 1, 2, 3, 4, 5, 6], chartCreated)
+            chartTotalPrediction = square_total[0]
+            chartTotalPrediction.unshift(null, null, null, null, null, null, chartTotal[6])
+            var usageFrequency = 7 / recentUsed
+            document.getElementById("usageFrequency").innerHTML = "- A box of " + itemName + " is opened approximately every " + Math.round(usageFrequency) + " days"
+            chartUsedPrediction = Array(7).fill(0)
+            for (i = 0; i < 6.5; i += usageFrequency) {
+                chartUsedPrediction[Math.round(i)] -= 1
+            }
+            chartChangePrediction = [];
+            chartCreatedPrediction = [];
+            var notified = false;
+            for (i = 7; i < 14; i++) {
+                diff = chartTotalPrediction[i]-chartTotalPrediction[i-1]
+                chartChangePrediction.push(diff)
+                if (diff > chartUsedPrediction[i-7]) {
+                    chartCreatedPrediction.push(diff-chartUsedPrediction[i-7])
+                }
+                else {
+                    chartCreatedPrediction.push(0)
+                    chartUsedPrediction[i-7] = diff
+                }
+                if (chartTotalPrediction[i] <= notify && notified == false) {
+                    document.getElementById("nextBox").innerHTML = "- You should purchase a new box of " + itemName + " by " + fullDay(loopDays()[i])
+                    notified = true
+                }
+            }
+            if (notified == false) {
+                document.getElementById("nextBox").innerHTML = "- You don't need to purchase any more " + itemName + " in the next week"
+            }
+            chartChangePrediction.unshift(null, null, null, null, null, null, null)
+            chartUsedPrediction.unshift(null, null, null, null, null, null, null)
+            chartCreatedPrediction.unshift(null, null, null, null, null, null, null)
+            window.chartValues = {created: chartCreated, used: chartUsed, total: chartTotal, totalPrediction: chartTotalPrediction, trend: square_total[1], changePrediction: chartChangePrediction, createdPrediction: chartCreatedPrediction, usedPrediction: chartUsedPrediction}
+            return window.chartValues
+        }
+
+        x = getItems()
+
+        x.then((mainData) => {
+            var ctx = document.getElementById('myChart').getContext('2d');
+            var myChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: loopDays(),
+                    datasets: [{
+                        label: '# of Boxes in Stock',
+                        data: mainData.total,
+                        backgroundColor: [
+                            'rgba(0, 0, 0, 0)'
+                        ],
+                        borderColor: [
+                            'rgba(0, 0, 0, 1)'
+                        ],
+                    }, {
+                        label: 'Prediction',
+                        data: mainData.totalPrediction,
+                        backgroundColor: [
+                            'rgba(0, 0, 0, 0)'
+                        ],
+                        borderColor: [
+                            'rgba(0, 0, 0, 0.3)'
+                        ],
+                    }, {
+                        label: 'Minimum Amount',
+                        data: Array(14).fill(notify),
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.3)'
+                        ],
+                        borderColor: [
+                            'rgba(0, 0, 0, 0)'
+                        ],
+                        pointRadius: 0
+                    }, {
+                        type: 'bar',
+                        label: 'Today',
+                        yAxisID: 'vLine',
+                        data: [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+                        backgroundColor: [
+                            'rgba(255, 0, 0, 1)',
+                            'rgba(255, 0, 0, 1)',
+                            'rgba(255, 0, 0, 1)',
+                            'rgba(255, 0, 0, 1)',
+                            'rgba(255, 0, 0, 1)',
+                            'rgba(255, 0, 0, 1)',
+                            'rgba(255, 0, 0, 1)'
+                        ],
+                        barPercentage: 0.1
+                    }]
+                },
+                options: {
+                    scales: {
+                        yAxes: [{
+                            ticks: {
+                                beginAtZero: true,
+                                precision: 0
+                            },
+                            afterDataLimits(scale) {
+                                scale.max += 2
+                            },
+                            scaleLabel: {
+                                display: true,
+                                labelString: '# of Boxes'
+                            }
+                        }, {
+                            id: 'vLine',
+                            display: false,
+                            max: 1,
+                            min: 0
+                        }]
+                    },
+                    tooltips: {
+                        callbacks: {
+                            label: function(tooltipItem, data) {
+                                if (tooltipItem.datasetIndex == 3) {
+                                    return "Today"
+                                }
+                                else {
+                                    return data.datasets[tooltipItem.datasetIndex].label + ": " + tooltipItem.yLabel
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            var ctx2 = document.getElementById('myChart2').getContext('2d');
+            var myChart2 = new Chart(ctx2, {
+                type: 'bar',
+                data: {
+                    labels: loopDays(),
+                    datasets: [{
+                        label: 'Amount Opened',
+                        data: mainData.used,
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 1)',
+                            'rgba(255, 99, 132, 1)',
+                            'rgba(255, 99, 132, 1)',
+                            'rgba(255, 99, 132, 1)',
+                            'rgba(255, 99, 132, 1)',
+                            'rgba(255, 99, 132, 1)',
+                            'rgba(255, 99, 132, 1)'
+                        ]
+                    }, {
+                        label: 'New Boxes',
+                        data: mainData.created,
+                        backgroundColor: [
+                            'rgba(0, 156, 123, 1)',
+                            'rgba(0, 156, 123, 1)',
+                            'rgba(0, 156, 123, 1)',
+                            'rgba(0, 156, 123, 1)',
+                            'rgba(0, 156, 123, 1)',
+                            'rgba(0, 156, 123, 1)',
+                            'rgba(0, 156, 123, 1)'
+                        ]
+                    }, {
+                        label: 'New Boxes Prediction',
+                        data: mainData.createdPrediction,
+                        backgroundColor: [
+                            'rgba(0, 156, 123, 0.3)',
+                            'rgba(0, 156, 123, 0.3)',
+                            'rgba(0, 156, 123, 0.3)',
+                            'rgba(0, 156, 123, 0.3)',
+                            'rgba(0, 156, 123, 0.3)',
+                            'rgba(0, 156, 123, 0.3)',
+                            'rgba(0, 156, 123, 0.3)',
+                            'rgba(0, 156, 123, 0.3)',
+                            'rgba(0, 156, 123, 0.3)',
+                            'rgba(0, 156, 123, 0.3)',
+                            'rgba(0, 156, 123, 0.3)',
+                            'rgba(0, 156, 123, 0.3)',
+                            'rgba(0, 156, 123, 0.3)',
+                            'rgba(0, 156, 123, 0.3)'
+                        ]
+                    }, {
+                        label: 'Predicted Amount Opened',
+                        data: mainData.usedPrediction,
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.3)',
+                            'rgba(255, 99, 132, 0.3)',
+                            'rgba(255, 99, 132, 0.3)',
+                            'rgba(255, 99, 132, 0.3)',
+                            'rgba(255, 99, 132, 0.3)',
+                            'rgba(255, 99, 132, 0.3)',
+                            'rgba(255, 99, 132, 0.3)',
+                            'rgba(255, 99, 132, 0.3)',
+                            'rgba(255, 99, 132, 0.3)',
+                            'rgba(255, 99, 132, 0.3)',
+                            'rgba(255, 99, 132, 0.3)',
+                            'rgba(255, 99, 132, 0.3)',
+                            'rgba(255, 99, 132, 0.3)',
+                            'rgba(255, 99, 132, 0.3)',
+                        ]
+                    }, {
+                        type: 'bar',
+                        label: 'Today',
+                        yAxisID: 'vLine',
+                        data: [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+                        backgroundColor: [
+                            'rgba(255, 0, 0, 1)',
+                            'rgba(255, 0, 0, 1)',
+                            'rgba(255, 0, 0, 1)',
+                            'rgba(255, 0, 0, 1)',
+                            'rgba(255, 0, 0, 1)',
+                            'rgba(255, 0, 0, 1)',
+                            'rgba(255, 0, 0, 1)'
+                        ],
+                        barPercentage: 0.1
+                    }]
+                },
+                options: {
+                    scales: {
+                        yAxes: [{
+                            ticks: {
+                                precision: 0
+                            },
+                            afterDataLimits(scale) {
+                                scale.max += 1
+                                scale.min -= 1
+                            },
+                            afterTickToLabelConversion : function(q){
+                                for(var tick in q.ticks){
+                                    q.ticks[tick] = Math.abs(q.ticks[tick])
+                                }
+                            },
+                            scaleLabel: {
+                                display: true,
+                                labelString: '# of Boxes'
+                            }
+                        }, {
+                            id: 'vLine',
+                            display: false,
+                            max: 1,
+                            min: 0
+                        }],
+                        xAxes: [{
+                            stacked: true
+                        }]
+                    },
+                    tooltips: {
+                        callbacks: {
+                            label: function(tooltipItem, data) {
+                                if (tooltipItem.datasetIndex == 4) {
+                                    return "Today"
+                                }
+                                else {
+                                    return data.datasets[tooltipItem.datasetIndex].label + ": " + Math.abs(tooltipItem.yLabel)
+                                }
+                            }
+                        }
+                    }
+                }
+            })
+        })
+    </script>
+</body>
+
+</html>
