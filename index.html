@@ -75,6 +75,13 @@
         let notify = 3; // Required amount of boxes
 
         let items = [];
+        
+        function modifyState(item) {
+            let stateObj = {id: "100"};
+            url = "/stats?item=" + item.toLowerCase()
+            window.history.replaceState(stateObj, "Stats", url);
+        }
+        modifyState(itemName)
 
         async function getItems() {
             let tempData = [];
