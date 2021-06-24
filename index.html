@@ -54,7 +54,7 @@
 </head>
 
 <body>
-    <h1 id="heading"></h1>
+    <h1 id="heading">Recent Stock Usage and Predictions</h1>
     <br>
     <h3><i id="nextBox"></i></h3>
     <p id="usageTime"></p>
@@ -70,19 +70,20 @@
         var db = firebase.firestore();
         window.chartValues = [];
         let mystore = 'kEaWx2RYcn7K4u3wWAaQ'; // Canteen store
-        let itemType = 'CKUBaxU5TBv5fQY2GSxX'; // Chips
-        let notify = 3; // Required amount of boxes
-        
+
         let params = new URLSearchParams(document.location.search)
         let itemName = params.get("item");
 
-        document.title = "StocLogg Stats - " + itemName
-        document.getElementById("heading").innerHTML = "Usage and Predictions for " + itemName
+        document.title = "Stats - " + itemName
+        document.getElementById("heading").innerHTML = "Stock Usage and Predictions: " + itemName
 
         let items = [];
 
         async function getItems() {
             let tempData = [];
+            itemData = await db.collection(`/store/${mystore}/itemTypes`).where('name', '==', itemName).get().then(snap => snap.docs[0])
+            itemType = itemData.id
+            notify = itemData.data().notify
             await db.collection(`/store/${mystore}/items`).where('typeId', '==', itemType).get().then((snap) => {
                 snap.forEach((doc) => {
                     items.push({ ...doc.data(), id: doc.id })
@@ -189,15 +190,16 @@
                     totalUsageTime += timeElapsed;
                 }
             }
-            var averageUsageTime = totalUsageTime / numUsed
-            document.getElementById("usageTime").innerHTML = "- The average storage time (until opened) for " + itemName + " is " + formatTime(averageUsageTime)
+            if (numUsed > 0) {
+                var averageUsageTime = totalUsageTime / numUsed
+                document.getElementById("usageTime").innerHTML = "- The average storage time (until opened) for " + itemName + " is " + formatTime(averageUsageTime)
+            }
             chartTotal = Array(7).fill(items.length - usageDates.length);
             chartCreated = Array(7).fill(0)
             chartUsed = Array(7).fill(0)
             addTotal = 0;
             addCreated = 0;
             addUsed = 0;
-            recentUsed = 0;
             for (var k = 6; k >= 0; k--) {
                 today = new Date()
                 today.setDate(today.getDate() + k - 6);
@@ -218,15 +220,22 @@
                 }
                 chartCreated[k] = addCreated;
                 chartUsed[k] = -addUsed;
-                recentUsed += addUsed
             }
             var chartTotalPrediction = findLineByLeastSquares([0, 1, 2, 3, 4, 5, 6], chartTotal)
             chartTotalPrediction.unshift(null, null, null, null, null, null, chartTotal[6])
-            var usageFrequency = 7 / recentUsed
-            document.getElementById("usageFrequency").innerHTML = "- A box of " + itemName + " is opened approximately every " + Math.round(usageFrequency) + " days"
             chartUsedPrediction = Array(7).fill(0)
-            for (i = 0; i < 6.5; i += usageFrequency) {
-                chartUsedPrediction[Math.round(i)] -= 1
+
+            if (usageDates.length > 1) {
+                usageDates.sort((a, b) => a - b)
+                var usageFrequency = (usageDates[usageDates.length-1] - usageDates[0]) / usageDates.length / 86400000
+                var nextUsage = usageDates[usageDates.length - 1].getTime()
+                while (nextUsage < new Date()) {
+                    nextUsage += usageFrequency * 86400000
+                }
+                document.getElementById("usageFrequency").innerHTML = "- A box of " + itemName + " is opened approximately every " + Math.round(usageFrequency) + " days"
+                for (i = nextUsage; i < new Date().getTime() + 561600000; i += usageFrequency * 86400000) {
+                    chartUsedPrediction[Math.round((i - new Date()) / 86400000) - 1] -= 1
+                }
             }
             chartCreatedPrediction = [];
             var notified = false;
@@ -237,7 +246,6 @@
                 }
                 else {
                     chartCreatedPrediction.push(0)
-                    chartUsedPrediction[i-7] = diff
                 }
                 if (chartTotalPrediction[i] <= notify && notified == false) {
                     document.getElementById("nextBox").innerHTML = "- You should purchase a new box of " + itemName + " by " + fullDay(loopDays()[i])
