@@ -50,11 +50,11 @@
         };
         firebase.initializeApp(firebaseConfig);
     </script>
-    <title>StocLogg Stats</title>
+    <title></title>
 </head>
 
 <body>
-    <h1>Recent Stock Usage and Predictions</h1>
+    <h1 id="heading"></h1>
     <br>
     <h3><i id="nextBox"></i></h3>
     <p id="usageTime"></p>
@@ -71,17 +71,15 @@
         window.chartValues = [];
         let mystore = 'kEaWx2RYcn7K4u3wWAaQ'; // Canteen store
         let itemType = 'CKUBaxU5TBv5fQY2GSxX'; // Chips
-        let itemName = "Chips";
         let notify = 3; // Required amount of boxes
+        
+        let params = new URLSearchParams(document.location.search)
+        let itemName = params.get("item");
+
+        document.title = "StocLogg Stats - " + itemName
+        document.getElementById("heading").innerHTML = "Usage and Predictions for " + itemName
 
         let items = [];
-        
-        function modifyState(item) {
-            let stateObj = {id: "100"};
-            url = "/stats?item=" + item.toLowerCase()
-            window.history.replaceState(stateObj, "Stats", url);
-        }
-        modifyState(itemName)
 
         async function getItems() {
             let tempData = [];
@@ -192,7 +190,7 @@
                 }
             }
             var averageUsageTime = totalUsageTime / numUsed
-            document.getElementById("usageTime").innerHTML = "- The average storage time (until opened) for " + i.typeName + " is " + formatTime(averageUsageTime)
+            document.getElementById("usageTime").innerHTML = "- The average storage time (until opened) for " + itemName + " is " + formatTime(averageUsageTime)
             chartTotal = Array(7).fill(items.length - usageDates.length);
             chartCreated = Array(7).fill(0)
             chartUsed = Array(7).fill(0)
